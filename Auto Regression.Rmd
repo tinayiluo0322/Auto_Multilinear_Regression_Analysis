@@ -1,0 +1,422 @@
+---
+title: "Auto Regression"
+output: html_document
+date: "2023-09-07"
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(ISLR2)
+data("Auto")
+glimpse(Auto)
+summary(Auto)
+```
+
+Create factor variables for origin.
+```{r}
+install.packages("ISLR")
+library("ISLR")
+install.packages("SmartEDA")
+library("SmartEDA")
+## Load sample dataset from ISLR pacakge
+Carseats= ISLR::Carseats
+```
+
+```{r}
+# Overview of the data - Type = 1
+ExpData(data=Auto,type=1)
+
+# Structure of the data - Type = 2
+ExpData(data=Auto,type=2)
+
+# Metadata Information with additional statistics like mean, median and variance
+ExpData(data=Auto,type=2, fun = c("mean", "median", "var"))
+
+# Derive Quantile 
+quantile_10 = function(x){
+  quantile_10 = quantile(x, na.rm = TRUE, 0.1)
+}
+
+quantile_90 = function(x){
+  quantile_90 = quantile(x, na.rm = TRUE, 0.9)
+}
+
+output_e1 <- ExpData(data=Auto, type=2, fun=c("quantile_10", "quantile_90"))
+
+output_e1
+```
+
+
+```{r}
+#Graphical Representation of all numerical features 
+
+#Density plot (Univariate)
+# Note: Variable excluded (if unique value of variable which is less than or eaual to 10 [nlim=10])
+plot1 <- ExpNumViz(Auto,target=NULL,nlim=10,Page=c(2,2),sample=4)
+plot1[[1]]
+```
+```{r}
+#frequency for all categorical independent variables (origin)
+ExpCTable(Auto,Target=NULL,margin=1,clim=10,nlim=3,round=2,bin=NULL,per=T)
+```
+```{r}
+#Bar Plot for all categorical variables (cylinders and origin)
+plot2 <- ExpCatViz(Auto,target=NULL,col ="slateblue4",clim=10,margin=2,Page = c(2,2))
+plot2[[1]]
+```
+```{r}
+#Graphical representation of all numeric variables
+#Scatter plot between all numeric variables and target variable mpg. This plot help to examine how well a target variable is correlated with dependent variables.
+
+#Dependent variable is mpg(continuous).
+
+#Note: sample=8 means randomly selected 8 scatter plots
+#Note: nlim=4 means included numeric variable with unique value is more than 4
+plot3 <- ExpNumViz(Auto,target="mpg",nlim=4,scatter=FALSE,fname=NULL,col="green",Page=c(2,2))
+plot3[[1]]
+```
+```{r}
+#Box plots for all numerical variables vs categorical dependent variable - Bivariate comparision only with categories
+#Boxplot for all the numeric attributes by each category of origin
+
+plot4 <- ExpNumViz(Auto,target="origin",type=1,nlim=3,fname=NULL,col=c("darkgreen","springgreen3","springgreen1"),Page=c(2,2))
+plot4[[1]]
+```
+
+```{r cars}
+Auto$origin_fac <- factor(Auto$origin,
+                          levels = c(1, 2, 3),
+                          labels = c("American",
+                                     "European",
+                                     "Japanese"))
+```
+
+Fit a model regressing mpg on horsepower, displacement, acceleration, cylinders, and origin.
+
+What do you notice about the standard errors of the cylinders levels compared to the other predictors?
+
+The sd errors of cylinders is less than origin, but higher than horsepower, displacement, acceleration
+
+```{r pressure, echo=FALSE}
+main_regression<- lm(mpg~horsepower+displacement+acceleration+cylinders+origin_fac,
+                   data=Auto)
+
+summary(main_regression)
+```
+Use the count() function to generate a table showing how many cars are in each cylinder level. 
+
+```{r}
+# Load the dplyr package
+library(dplyr)
+
+# Count the number of cars in each cylinder level
+cylinder_counts <- Auto %>%
+  count(cylinders)
+
+# Print the resulting table
+print(cylinder_counts)
+```
+filter out cylinders=3 and cylinders=5 (extremely low values), keep cylinder numbers between 4 and 8
+
+```{r}
+filtered_data <- Auto %>%
+  filter(cylinders !=3, cylinders !=5)
+
+new_cylinder_counts <- filtered_data %>%
+  count(cylinders)
+
+print(new_cylinder_counts)
+```
+Look at the residual and qq plots for this model. What do you observe? Do any of the regression assumptions appear to be violated here? If so, which one(s)? Note that you can generate certain plots using the which option, i.e., plot(model_object, which=1) generates the residual plot, and plot(model_object, which=2) generates the qq-plot.
+
+It seems like on the residual plot, the pattern is non-linear and the variance of errors seems to increase from left to right. Therefore, the linearity and equal variance of errors need to be adjusted. For linearity, adjust x variables log(x), for equal variance, adjust y variable log(y)
+
+```{r}
+Auto <- Auto %>%
+  mutate(new_cylinders = case_when(
+    cylinders == 3 ~ NA_real_,
+    cylinders == 5 ~ NA_real_,
+    TRUE ~ as.numeric(cylinders)
+  ))
+
+# Create a new factor column 'new_cylinders_fac' with labels "4", "6", and "8"
+Auto <- Auto %>%
+  mutate(new_cylinders_fac = factor(new_cylinders, levels = c(4, 6, 8), labels = c("4", "6", "8")))
+
+#factor origin in Auto
+Auto$origin_fac <- factor(Auto$origin,
+                          levels = c(1, 2, 3),
+                          labels = c("American",
+                                     "European",
+                                     "Japanese"))
+
+# Perform linear regression with the updated dataset
+filtered_regression <- lm(mpg ~ horsepower + displacement + acceleration + new_cylinders_fac + origin_fac,data = Auto)
+
+# Print the summary of the regression
+summary(filtered_regression)
+
+#plot residual plot
+plot(filtered_regression, which=1)
+
+#plot qq plot
+plot(filtered_regression, which=2)
+```
+Generate a plot of mpg and displacement. Do you think a transformation of the displacement variable might be appropriate? If so, which one and why? 
+
+It seems like on the residual plot, the pattern is non-linear and the variance of errors seems to increase from left to right. Therefore, the linearity and equal variance of errors need to be adjusted. For linearity, adjust x variables log(x), for equal variance, adjust y variable log(y)
+
+```{r}
+filtered_displacement_regression <- lm(mpg ~ displacement, data = Auto)
+
+# Print the summary of the regression
+summary(filtered_displacement_regression)
+
+#plot residual 
+plot(filtered_displacement_regression, which=1)
+#plot qq
+plot(filtered_displacement_regression, which=2)
+```
+Transform the mpg and displacement predictor variable 
+
+```{r}
+filtered_log_displacement_regression <- lm(log(mpg) ~ log(displacement), data = Auto)
+
+# Print the summary of the regression
+summary(filtered_log_displacement_regression)
+
+#plot residual 
+plot(filtered_log_displacement_regression,which=1)
+
+#plot qq
+plot(filtered_log_displacement_regression,which=2)
+```
+Then, add color to your plot for cylinders. Is an interaction term appropriate? Finally, replace cylinders to color by origin. Is an interaction term appropriate?
+
+Interaction terms needed for origin 
+
+```{r}
+ggplot(Auto, aes(x=log(displacement), y=log(mpg), col=new_cylinders_fac))+
+  geom_point()+
+  geom_smooth(method="lm", se=F)+
+  labs(x="log displacement",
+       y="log MPG", col="cylinders")
+
+ggplot(Auto, aes(x=log(displacement), y=log(mpg), col=origin_fac))+
+  geom_point()+
+  geom_smooth(method="lm", se=F)+
+  labs(x="log displacement",
+       y="log MPG", col="origins")
+```
+Add interaction terms on log displacement and origin 
+
+```{r}
+filtered_log_displacement_regression_add_interaction <- lm(log(mpg) ~ log(displacement) * origin_fac, data = Auto)
+
+# Print the summary of the regression
+summary(filtered_log_displacement_regression_add_interaction)
+
+#plot residual 
+plot(filtered_log_displacement_regression_add_interaction,which=1)
+
+#plot qq
+plot(filtered_log_displacement_regression_add_interaction,which=2)
+
+```
+Generate a plot of mpg and acceleration. Do you think a transformation of the acceleration variable might be appropriate? If so, which one and why? 
+
+It seems like on the residual plot, the pattern is non-linear. Therefore, the linearity needs to be adjusted. For linearity, adjust x variables log(x).
+
+```{r}
+filtered_acceleration_regression <- lm(mpg ~ acceleration, data = Auto)
+
+# Print the summary of the regression
+summary(filtered_acceleration_regression)
+
+#plot residual 
+plot(filtered_acceleration_regression, which=1)
+#plot qq
+plot(filtered_acceleration_regression, which=2)
+```
+Transform the acceleration predictor variable 
+
+```{r}
+filtered_log_acceleration_regression <- lm(mpg ~ log(acceleration), data = Auto)
+
+# Print the summary of the regression
+summary(filtered_log_acceleration_regression)
+
+#plot residual 
+plot(filtered_log_acceleration_regression,which=1)
+
+#plot qq
+plot(filtered_log_acceleration_regression,which=2)
+```
+Then, add color to your plot for cylinders. Is an interaction term appropriate? Finally, replace cylinders to color by origin. Is an interaction term appropriate?
+
+Interaction terms needed for both cylinders and origin 
+
+```{r}
+ggplot(Auto, aes(x=log(acceleration), y=mpg, col=new_cylinders_fac))+
+  geom_point()+
+  geom_smooth(method="lm", se=F)+
+  labs(x="log acceleration",
+       y="MPG", col="cylinders")
+
+ggplot(Auto, aes(x=log(acceleration), y=mpg, col=origin_fac))+
+  geom_point()+
+  geom_smooth(method="lm", se=F)+
+  labs(x="log acceleration",
+       y="MPG", col="origins")
+```
+add interaction terms on log acceleration and cylinders and log acceleration and origin
+
+```{r}
+filtered_log_acceleration_regression_add_interaction <- lm(mpg ~ log(acceleration) * new_cylinders_fac + log(acceleration) * origin_fac, data = Auto)
+
+# Print the summary of the regression
+summary(filtered_log_acceleration_regression_add_interaction)
+
+#plot residual 
+plot(filtered_log_acceleration_regression_add_interaction,which=1)
+
+#plot qq
+plot(filtered_log_acceleration_regression_add_interaction,which=2)
+```
+Generate a plot of mpg and horsepower. Do you think a transformation of the horsepower variable might be appropriate? If so, which one and why? 
+
+It seems like on the residual plot, the pattern is non-linear and the variance of errors seems to increase from left to right. Therefore, the linearity and equal variance of errors need to be adjusted. For linearity, adjust x variables log(x), for equal variance, adjust y variable log(y)
+
+```{r}
+filtered_horsepower_regression <- lm(mpg ~ horsepower, data = Auto)
+
+# Print the summary of the regression
+summary(filtered_horsepower_regression)
+
+#plot residual 
+plot(filtered_horsepower_regression, which=1)
+#plot qq
+plot(filtered_horsepower_regression, which=2)
+```
+Transform the mpg and the horsepower predictor variable
+
+```{r}
+filtered_log_horsepower_regression <- lm(log(mpg) ~ log(horsepower), data = Auto)
+
+# Print the summary of the regression
+summary(filtered_log_horsepower_regression)
+
+#plot residual 
+plot(filtered_log_horsepower_regression,which=1)
+
+#plot qq
+plot(filtered_log_horsepower_regression,which=2)
+```
+Then, add color to your plot for cylinders. Is an interaction term appropriate? Finally, replace cylinders to color by origin. Is an interaction term appropriate?
+
+Interaction terms needed for both cylinders and origin 
+
+```{r}
+ggplot(Auto, aes(x=log(horsepower), y=log(mpg), col=new_cylinders_fac))+
+  geom_point()+
+  geom_smooth(method="lm", se=F)+
+  labs(x="log horsepower",
+       y="log MPG", col="cylinders")
+
+ggplot(Auto, aes(x=log(horsepower), y=log(mpg), col=origin_fac))+
+  geom_point()+
+  geom_smooth(method="lm", se=F)+
+  labs(x="log horsepower",
+       y="log MPG", col="origins")
+```
+add interaction terms on log horsepower and cylinders and log horsepower and origin
+
+From the summary report, it seems like the interaction term on log horsepower and origin is not needed (Not significant).
+
+```{r}
+filtered_log_horsepower_regression_add_interaction <- lm(log(mpg) ~ log(horsepower) * new_cylinders_fac + log(horsepower) * origin_fac, data = Auto)
+
+# Print the summary of the regression
+summary(filtered_log_horsepower_regression_add_interaction)
+
+#plot residual 
+plot(filtered_log_horsepower_regression_add_interaction,which=1)
+
+#plot qq
+plot(filtered_log_horsepower_regression_add_interaction,which=2)
+```
+Decide if you want to use a transformation on displacement, acceleration, and/or horsepower, or interaction term(s). Consider the implications of estimate interpretations. Fit the model with the additional terms that you choose, and generate the residual and qq plots. What do you notice compared to what you saw in #2?
+
+Detailed interpretation for the above regression results:
+
+log(horsepower): On average, a one-unit increase in log(horsepower) is associated with a decrease of 17.1803 units in mpg, all else constant.
+
+new_cylinders_fac6: On average, new cylinders 6' mpg is 63.2509 lower than new cylinders 4' mpg, holding all else constant. 
+
+new_cylinders_fac8:On average, new cylinders 8' mpg is 72.8153 lower than new cylinders 4' mpg, holding all else constant. 
+
+log(displacement): On average, a one-unit increase in log(displacement) is associated with a decrease of 4.4958 units in mpg, all else constant.
+
+origin_facEuropean: On average, European cars' mpg is 46.1726 lower than American cars' mpg, holding all else constant.
+
+origin_facJapanese: On average, Japanese cars' mpg is 1.0518 lower than American cars' mpg, holding all else constant. it's not statistically significant (p-value > 0.05).
+
+log(acceleration): On average, a one-unit increase in log(acceleration) is associated with a decrease of 17.4285 units in mpg, all else constant.
+
+log(horsepower):new_cylinders_fac6: Per increase in log(horsepower), mpg increase by an **additional** 10.4851, on average, all else held constant, for new cylinders 6 compared to new cylinders 4. 
+
+log(horsepower):new_cylinders_fac8: Per increase in log(horsepower), mpg increase by an **additional** 7.3571, on average, all else held constant, for new cylinders 8 compared to new cylinders 4. 
+
+log(displacement):origin_facEuropean: Per increase in log(displacement), mpg increase by an **additional** 1.7288, on average, all else held constant, for European cars compared to American cars. it's not statistically significant (p-value > 0.05).
+
+log(displacement):origin_facJapanese: Per increase in log(displacement), mpg decrease by an **additional** 0.9837, on average, all else held constant, for Japanese cars compared to American cars. it's not statistically significant (p-value > 0.05).
+
+new_cylinders_fac6:log(acceleration): Per increase in log(acceleration), mpg increases by an **additional** 4.7260, on average, all else held constant, for new cylinders 6 compared to new cylinders 4. it's not statistically significant (p-value > 0.05).
+
+new_cylinders_fac8:log(acceleration): Per increase in log(acceleration), mpg increases by an **additional** 13.5197, on average, all else held constant, for new cylinders 8 compared to new cylinders 4. 
+
+origin_facEuropean:log(acceleration): Per increase in log(acceleration), mpg increase by an **additional** 13.1480, on average, all else held constant, for European cars compared to American cars. 
+
+log(acceleration):origin_facJapanese: Per increase in log(acceleration), mpg decrease by an **additional**2.5459, on average, all else held constant, for Japanese cars compared to American cars. it's not statistically significant (p-value > 0.05).
+
+for residual plot, the linearity looks good, the equal variance slightly off the mark (increase from left to right). 
+
+for qq plot, the normality of errors looks good.
+
+```{r}
+final_regression_1 <- lm(mpg ~ log(horsepower)*new_cylinders_fac + log(displacement)*origin_fac + log(acceleration)*new_cylinders_fac + log(acceleration)*origin_fac,data = Auto)
+
+# Print the summary of the regression
+summary(final_regression_1)
+
+#plot residual 
+plot(final_regression_1,which=1)
+
+#plot qq
+plot(final_regression_1,which=2)
+```
+Fit the model using log(mpg) as the outcome. Generate the residual and qq plots and comment on the difference(s) that you observe. Consider the implications for model interpretation. Do you think the transformation of the outcome variable is useful here?
+
+I observe that more interaction terms become insignificant after transform mpg to log(mpg)
+
+for residual plot, the linearity and equal variance looks good.
+
+for qq plot, the normality of errors looks good.
+
+I think the transformation of the outcome variable is useful here.
+
+```{r}
+final_regression_2 <- lm(log(mpg) ~ log(horsepower)*new_cylinders_fac + log(displacement)*origin_fac + log(acceleration)*new_cylinders_fac + log(acceleration)*origin_fac,data = Auto)
+
+# Print the summary of the regression
+summary(final_regression_2)
+
+#plot residual 
+plot(final_regression_2,which=1)
+
+#plot qq
+plot(final_regression_2,which=2)
+
+plot(final_regression_2)
+```
+
